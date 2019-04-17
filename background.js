@@ -4,7 +4,8 @@ const TRAVEL_CONTAINER_COLOR = "purple";
 const TRAVEL_CONTAINER_ICON = "briefcase";
 
 let TRAVEL_DOMAINS = [
-  "tripadvisor.com"
+  "tripadvisor.com",
+  "momondo.com"
 ];
 
 //let TRAVEL2_DOMAINS = [];
