@@ -1,24 +1,26 @@
 // Param values from https://developer.mozilla.org/Add-ons/WebExtensions/API/contextualIdentities/create
-const GIT_CONTAINER_NAME = "Git";
-const GIT_CONTAINER_COLOR = "purple";
-const GIT_CONTAINER_ICON = "briefcase";
+const TRAVEL_CONTAINER_NAME = "Travel";
+const TRAVEL_CONTAINER_COLOR = "purple";
+const TRAVEL_CONTAINER_ICON = "briefcase";
 
-let GITHUB_DOMAINS = ["github.com", "github.io", "githubapp.com", "githubusercontent.com"];
+let TRAVEL_DOMAINS = [
+  "tripadvisor.com"
+];
 
-let GITLAB_DOMAINS = ["gitlab.com", "gitlab-static.net"];
-
-let BITBUCKET_DOMAINS = ["bitbucket.org", "atlassian.com"];
-
-GITHUB_DOMAINS = GITHUB_DOMAINS.concat(GITLAB_DOMAINS).concat(BITBUCKET_DOMAINS);
+//let TRAVEL2_DOMAINS = [];
+//
+//let TRAVEL3_DOMAINS = [];
+//
+//TRAVEL_DOMAINS = TRAVEL_DOMAINS.concat(TRAVEL2_DOMAINS).concat(TRAVEL3_DOMAINS);
 
 const MAC_ADDON_ID = "@testpilot-containers";
 
 let macAddonEnabled = false;
-let gitCookieStoreId = null;
+let travelCookieStoreId = null;
 
 const canceledRequests = {};
 const tabsWaitingToLoad = {};
-const gitHostREs = [];
+const travelHostREs = [];
 
 async function isMACAddonEnabled () {
   try {
@@ -114,13 +116,13 @@ function shouldCancelEarly (tab, options) {
   return false;
 }
 
-function generateGitHostREs () {
-  for (let gitDomain of GITHUB_DOMAINS) {
-    gitHostREs.push(new RegExp(`^(.*\\.)?${gitDomain}$`));
+function generateTravelHostREs () {
+  for (let travelDomain of TRAVEL_DOMAINS) {
+    travelHostREs.push(new RegExp(`^(.*\\.)?${travelDomain}$`));
   }
 }
 
-async function clearGitCookies () {
+async function clearTravelCookies () {
   // Clear all git cookies
   const containers = await browser.contextualIdentities.query({});
   containers.push({
@@ -129,39 +131,39 @@ async function clearGitCookies () {
 
   let macAssignments = [];
   if (macAddonEnabled) {
-    const promises = GITHUB_DOMAINS.map(async gitDomain => {
-      const assigned = await getMACAssignment(`https://${gitDomain}/`);
-      return assigned ? gitDomain : null;
+    const promises = TRAVEL_DOMAINS.map(async travelDomain => {
+      const assigned = await getMACAssignment(`https://${travelDomain}/`);
+      return assigned ? travelDomain : null;
     });
     macAssignments = await Promise.all(promises);
   }
 
-  GITHUB_DOMAINS.map(async gitDomain => {
-    const gitCookieUrl = `https://${gitDomain}/`;
+  TRAVEL_DOMAINS.map(async travelDomain => {
+    const travelCookieUrl = `https://${travelDomain}/`;
 
-    // dont clear cookies for gitDomain if mac assigned (with or without www.)
+    // dont clear cookies for travelDomain if mac assigned (with or without www.)
     if (macAddonEnabled &&
-        (macAssignments.includes(gitDomain) ||
-         macAssignments.includes(`www.${gitDomain}`))) {
+        (macAssignments.includes(travelDomain) ||
+         macAssignments.includes(`www.${travelDomain}`))) {
       return;
     }
 
     containers.map(async container => {
       const storeId = container.cookieStoreId;
-      if (storeId === gitCookieStoreId) {
-        // Don't clear cookies in the Git Container
+      if (storeId === travelCookieStoreId) {
+        // Don't clear cookies in the Travel Container
         return;
       }
 
       const cookies = await browser.cookies.getAll({
-        domain: gitDomain,
+        domain: travelDomain,
         storeId
       });
 
       cookies.map(cookie => {
         browser.cookies.remove({
           name: cookie.name,
-          url: gitCookieUrl,
+          url: travelCookieUrl,
           storeId
         });
       });
@@ -170,17 +172,17 @@ async function clearGitCookies () {
 }
 
 async function setupContainer () {
-  // Use existing Git container, or create one
-  const contexts = await browser.contextualIdentities.query({name: GIT_CONTAINER_NAME});
+  // Use existing Travel container, or create one
+  const contexts = await browser.contextualIdentities.query({name: TRAVEL_CONTAINER_NAME});
   if (contexts.length > 0) {
-    gitCookieStoreId = contexts[0].cookieStoreId;
+    travelCookieStoreId = contexts[0].cookieStoreId;
   } else {
     const context = await browser.contextualIdentities.create({
-      name: GIT_CONTAINER_NAME,
-      color: GIT_CONTAINER_COLOR,
-      icon: GIT_CONTAINER_ICON
+      name: TRAVEL_CONTAINER_NAME,
+      color: TRAVEL_CONTAINER_COLOR,
+      icon: TRAVEL_CONTAINER_ICON
     });
-    gitCookieStoreId = context.cookieStoreId;
+    travelCookieStoreId = context.cookieStoreId;
   }
 }
 
@@ -195,10 +197,10 @@ function reopenTab ({url, tab, cookieStoreId}) {
   browser.tabs.remove(tab.id);
 }
 
-function isGitURL (url) {
+function isTravelURL (url) {
   const parsedUrl = new URL(url);
-  for (let gitHostRE of gitHostREs) {
-    if (gitHostRE.test(parsedUrl.host)) {
+  for (let travelHostRE of travelHostREs) {
+    if (travelHostRE.test(parsedUrl.host)) {
       return true;
     }
   }
@@ -211,14 +213,14 @@ function shouldContainInto (url, tab) {
     return false;
   }
 
-  if (isGitURL(url)) {
-    if (tab.cookieStoreId !== gitCookieStoreId) {
-      // Git-URL outside of Git Container Tab
-      // Should contain into Git Container
-      return gitCookieStoreId;
+  if (isTravelURL(url)) {
+    if (tab.cookieStoreId !== travelCookieStoreId) {
+      // Travel-URL outside of Travel Container Tab
+      // Should contain into Travel Container
+      return travelCookieStoreId;
     }
-  } else if (tab.cookieStoreId === gitCookieStoreId) {
-    // Non-Git-URL inside Git Container Tab
+  } else if (tab.cookieStoreId === travelCookieStoreId) {
+    // Non-Travel-URL inside Travel Container Tab
     // Should contain into Default Container
     return "firefox-default";
   }
@@ -288,8 +290,8 @@ async function maybeReopenAlreadyOpenTabs () {
   });
 }
 
-async function containGit (options) {
-  // Listen to requests and open Git into its Container,
+async function containTravel (options) {
+  // Listen to requests and open Travel into its Container,
   // open other sites into the default tab context
   if (options.tabId === -1) {
     // Request doesn't belong to a tab
@@ -342,13 +344,13 @@ async function containGit (options) {
   } catch (error) {
     // TODO: Needs backup strategy
     // See https://github.com/mozilla/contain-facebook/issues/23
-    // Sometimes this add-on is installed but doesn't get a gitCookieStoreId ?
+    // Sometimes this add-on is installed but doesn't get a travelCookieStoreId ?
     // eslint-disable-next-line no-console
     console.log(error);
     return;
   }
-  clearGitCookies();
-  generateGitHostREs();
+  clearTravelCookies();
+  generateTravelHostREs();
 
   // Clean up canceled requests
   browser.webRequest.onCompleted.addListener((options) => {
@@ -363,7 +365,7 @@ async function containGit (options) {
   },{urls: ["<all_urls>"], types: ["main_frame"]});
 
   // Add the request listener
-  browser.webRequest.onBeforeRequest.addListener(containGit, {urls: ["<all_urls>"], types: ["main_frame"]}, ["blocking"]);
+  browser.webRequest.onBeforeRequest.addListener(containTravel, {urls: ["<all_urls>"], types: ["main_frame"]}, ["blocking"]);
 
   maybeReopenAlreadyOpenTabs();
 })();
